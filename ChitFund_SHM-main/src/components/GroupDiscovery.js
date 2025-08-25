@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { listGroups, getGroup, joinGroup } from '../web3/contracts.js';
 import { ethers } from 'ethers';
+import { getProvider } from '../web3/provider.js';
 
 const GroupDiscovery = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,11 +18,14 @@ const GroupDiscovery = () => {
       setLoading(true);
       setError('');
       try {
+        const provider = getProvider();
         let addresses = await listGroups();
-        // Filter out invalid/empty addresses to avoid ENS resolution errors
         addresses = (addresses || []).filter((addr) => typeof addr === 'string' && addr.length > 0 && ethers.isAddress(addr));
+        // Filter to addresses that actually have contract code
+        const codeResults = await Promise.all(addresses.map(async (addr) => ({ addr, code: await provider.getCode(addr) })));
+        const validAddrs = codeResults.filter(({ code }) => code && code !== '0x').map(({ addr }) => addr);
         const details = await Promise.all(
-          addresses.map(async (addr) => {
+          validAddrs.map(async (addr) => {
             try {
               const group = getGroup(addr, true);
               const [members, cfg] = await Promise.all([
@@ -42,27 +46,17 @@ const GroupDiscovery = () => {
                 currentMembers: members.length,
                 duration: durationPeriods,
                 startDate: startTime ? new Date(startTime * 1000).toISOString().slice(0, 10) : '-',
-                status: members.length >= membersMax ? 'full' : (startTime && Date.now() / 1000 >= startTime ? 'active' : 'forming'),
+                status: (membersMax > 0 && members.length >= membersMax) ? 'full' : (startTime && Date.now() / 1000 >= startTime ? 'active' : 'forming'),
                 securityDepositWei: securityDeposit,
                 currency,
               };
             } catch (e) {
-              return {
-                address: addr,
-                name: `Chit Group ${addr.slice(0, 6)}…${addr.slice(-4)}`,
-                amountWei: '0',
-                membersMax: 0,
-                currentMembers: 0,
-                duration: 0,
-                startDate: '-',
-                status: 'forming',
-                securityDepositWei: '0',
-                currency: '0x0000000000000000000000000000000000000000',
-              };
+              return null;
             }
           })
         );
-        if (mounted) setGroups(details);
+        const cleaned = details.filter(Boolean);
+        if (mounted) setGroups(cleaned);
       } catch (e) {
         if (mounted) setError(e?.message || 'Failed to load groups');
       } finally {
@@ -281,7 +275,7 @@ const GroupDiscovery = () => {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
-                      {group.status === 'forming' && group.currentMembers < group.membersMax ? (
+                      {group.status !== 'full' ? (
                         <button
                           className="btn btn-primary"
                           onClick={() => handleJoinGroup(group)}

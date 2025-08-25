@@ -16,8 +16,8 @@ import Sidebar from './components/Sidebar.js';
 
 function App() {
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    localStorage.removeItem('user'); // Clear any existing user data
+    return null;
   });
   const [activeComponent, setActiveComponent] = useState('dashboard');
   const [notifications, setNotifications] = useState([

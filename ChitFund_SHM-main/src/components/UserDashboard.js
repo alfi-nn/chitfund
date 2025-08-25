@@ -79,7 +79,7 @@ const UserDashboard = () => {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>Welcome back, User!</h1>
+        <h1>Welcome back, Aswin Arun!</h1>
         <p>Here's what's happening with your chit fund investments today.</p>
       </div>
 

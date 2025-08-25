@@ -22,48 +22,23 @@ const Login = ({ onLogin }) => {
     if (error) setError('');
   };
 
-  const handleSubmit = async (e) => {
+    const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
-    // Simple validation
-    if (!formData.email || !formData.password) {
-      setError('Please fill in all fields');
-      setIsLoading(false);
-      return;
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setError('Please enter a valid email address');
-      setIsLoading(false);
-      return;
-    }
 
     try {
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // For demo purposes, we'll create a mock user
-      // In a real app, you'd validate against a backend
+      // Use fixed demo user data
       const mockUser = {
         id: 1,
-        name: 'Demo User',
-        email: formData.email,
+        name: 'Aswin Arun',
+        email: 'aswin@example.com',
         phone: '+1234567890',
-        avatar: 'https://via.placeholder.com/150/667eea/ffffff?text=U'
+        avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=AA&backgroundColor=6366f1'
       };
-
-      // Save remember me preference
-      if (rememberMe) {
-        localStorage.setItem('rememberMe', 'true');
-        localStorage.setItem('savedEmail', formData.email);
-      } else {
-        localStorage.removeItem('rememberMe');
-        localStorage.removeItem('savedEmail');
-      }
 
       onLogin(mockUser);
       navigate('/');

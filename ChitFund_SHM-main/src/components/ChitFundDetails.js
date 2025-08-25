@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './ChitFundDetails.css';
 
@@ -7,6 +7,38 @@ const ChitFundDetails = ({ chitFunds, user }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [bidAmount, setBidAmount] = useState('');
+  const bidStorageKey = useMemo(() => `bids_${id}`, [id]);
+  const [bids, setBids] = useState([]);
+
+  function loadBids() {
+    try {
+      const raw = localStorage.getItem(bidStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) return parsed;
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveBids(items) {
+    try { localStorage.setItem(bidStorageKey, JSON.stringify(items)); } catch {}
+  }
+
+  useEffect(() => {
+    setBids(loadBids());
+    const onStorage = (e) => {
+      if (e.key === bidStorageKey) {
+        setBids(loadBids());
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    const interval = setInterval(() => setBids(loadBids()), 1500);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      clearInterval(interval);
+    };
+  }, [bidStorageKey]);
 
   const chitFund = chitFunds.find(fund => fund.id === parseInt(id));
 
@@ -25,10 +57,17 @@ const ChitFundDetails = ({ chitFunds, user }) => {
   }
 
   const handleBid = () => {
-    if (!bidAmount || bidAmount <= 0) return;
-    
-    // In a real app, you'd send this to a backend
-    alert(`Bid placed for ₹${bidAmount}`);
+    if (!bidAmount || Number(bidAmount) <= 0) return;
+    const who = user?.name || user?.email || 'You';
+    const entry = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      user: String(who),
+      amount: Number(bidAmount),
+      at: Date.now(),
+    };
+    const next = [entry, ...loadBids()].sort((a, b) => b.at - a.at).slice(0, 100);
+    saveBids(next);
+    setBids(next);
     setBidAmount('');
   };
 
@@ -212,18 +251,19 @@ const ChitFundDetails = ({ chitFunds, user }) => {
               </div>
 
               <div className="bids-history">
-                <h4>Recent Bids</h4>
+                <h4>Bidding History</h4>
                 <div className="bids-list">
-                  <div className="bid-item">
-                    <span className="bidder">John Doe</span>
-                    <span className="bid-amount">₹45,000</span>
-                    <span className="bid-date">Today</span>
-                  </div>
-                  <div className="bid-item">
-                    <span className="bidder">Jane Smith</span>
-                    <span className="bid-amount">₹42,000</span>
-                    <span className="bid-date">Yesterday</span>
-                  </div>
+                  {bids.length === 0 ? (
+                    <div style={{ color: '#718096' }}>No bids yet</div>
+                  ) : (
+                    bids.map((b) => (
+                      <div className="bid-item" key={b.id}>
+                        <span className="bidder">{b.user}</span>
+                        <span className="bid-amount">₹{Number(b.amount).toLocaleString()}</span>
+                        <span className="bid-date">{new Date(b.at).toLocaleTimeString()}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

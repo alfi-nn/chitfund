@@ -1,18 +1,97 @@
 import React, { useEffect, useState } from 'react';
 import { createGroup, listGroups, getGroup, openCycle, finalizeBidding, distributeFunds } from '../web3/contracts.js';
 
+// Local, persistent dummy data support (stored in localStorage)
+const DUMMY_STORAGE_KEY = 'chit_dummy_groups_v1';
+
+function generateFakeAddress() {
+  const hex = Array.from(crypto.getRandomValues(new Uint8Array(20)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `0x${hex}`;
+}
+
+function defaultDummyGroups() {
+  const today = new Date();
+  const iso = (d) => new Date(d).toISOString().slice(0, 10);
+  return [
+    {
+      address: generateFakeAddress(),
+      contributionAmount: '10000000000000000',
+      membersMax: 10,
+      currentMembers: 3,
+      durationPeriods: 12,
+      startDate: iso(today),
+      status: 'forming',
+      currentCycle: 0,
+    },
+    {
+      address: generateFakeAddress(),
+      contributionAmount: '25000000000000000',
+      membersMax: 8,
+      currentMembers: 8,
+      durationPeriods: 8,
+      startDate: iso(today),
+      status: 'full',
+      currentCycle: 0,
+    },
+    {
+      address: generateFakeAddress(),
+      contributionAmount: '50000000000000000',
+      membersMax: 6,
+      currentMembers: 5,
+      durationPeriods: 10,
+      startDate: iso(today),
+      status: 'active',
+      currentCycle: 1,
+    },
+  ];
+}
+
+function loadDummyGroups() {
+  try {
+    const raw = localStorage.getItem(DUMMY_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  const seed = defaultDummyGroups();
+  try { localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(seed)); } catch {}
+  return seed;
+}
+
+function saveDummyGroups(items) {
+  try { localStorage.setItem(DUMMY_STORAGE_KEY, JSON.stringify(items)); } catch {}
+}
+
+function addDummyGroupFromCfg(cfg) {
+  const addr = generateFakeAddress();
+  const items = loadDummyGroups();
+  const startDate = cfg.startTime ? new Date(cfg.startTime * 1000).toISOString().slice(0, 10) : '-';
+  items.unshift({
+    address: addr,
+    contributionAmount: String(cfg.contributionAmount ?? '0'),
+    membersMax: Number(cfg.membersMax ?? 0),
+    currentMembers: 0,
+    durationPeriods: Number(cfg.durationPeriods ?? 0),
+    startDate,
+    status: 'forming',
+    currentCycle: 0,
+  });
+  saveDummyGroups(items);
+  return addr;
+}
+
 const ChitGroupManagement = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newGroup, setNewGroup] = useState({
-    contributionAmount: '',
-    membersMax: '',
-    durationPeriods: '',
-    startTime: '',
+    contributionAmount: '10000000000000000', // 0.01 ETH
+    membersMax: '5',
+    durationPeriods: '12',
+    startTime: new Date().toISOString().slice(0, 10),
     organizerFeeBps: '500',
     securityDeposit: '0',
     biddingCommitDuration: '600',
     biddingRevealDuration: '600',
-    periodDuration: '2592000',
+    periodDuration: '3600', // 1 hour
   });
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -22,7 +101,7 @@ const ChitGroupManagement = () => {
 
   async function refreshGroups() {
     const addresses = await listGroups();
-    setGroups((await Promise.all(addresses.map(async (addr) => {
+    const chainGroups = await Promise.all(addresses.map(async (addr) => {
       try {
         const group = getGroup(addr, true);
         const [members, cfg, currentCycle] = await Promise.all([group.getMembers(), group.cfg(), group.currentCycle?.() ?? Promise.resolve(0)]);
@@ -34,7 +113,15 @@ const ChitGroupManagement = () => {
       } catch {
         return { address: addr, contributionAmount: '0', membersMax: 0, currentMembers: 0, durationPeriods: 0, startDate: '-', status: 'forming', currentCycle: 0 };
       }
-    }))))
+    }));
+
+    const dummy = loadDummyGroups();
+    const merged = [...chainGroups];
+    const known = new Set(merged.map(g => g.address.toLowerCase()));
+    for (const d of dummy) {
+      if (!known.has(d.address.toLowerCase())) merged.push(d);
+    }
+    setGroups(merged);
   }
 
   useEffect(() => {
@@ -73,8 +160,15 @@ const ChitGroupManagement = () => {
         biddingRevealDuration: Number(newGroup.biddingRevealDuration),
         periodDuration: Number(newGroup.periodDuration),
       };
-      const groupAddr = await createGroup(cfg);
-      setTxStatus(groupAddr ? `Created group at ${groupAddr}` : 'Transaction confirmed (no event parsed)');
+      let groupAddr;
+      try {
+        groupAddr = await createGroup(cfg);
+        setTxStatus(groupAddr ? `Created group at ${groupAddr}` : 'Transaction confirmed (no event parsed)');
+      } catch (chainErr) {
+        // Fallback to dummy/local creation for use
+        groupAddr = addDummyGroupFromCfg(cfg);
+        setTxStatus(`Created demo group locally at ${groupAddr}`);
+      }
       setShowCreateForm(false);
       await refreshGroups();
     } catch (e) {
@@ -139,6 +233,13 @@ const ChitGroupManagement = () => {
           onClick={() => setShowCreateForm(true)}
         >
           Create New Chit Group
+        </button>
+        <button 
+          className="btn btn-secondary"
+          style={{ marginLeft: '10px' }}
+          onClick={async () => { saveDummyGroups(defaultDummyGroups()); await refreshGroups(); }}
+        >
+          Load Sample Groups
         </button>
       </div>
 
