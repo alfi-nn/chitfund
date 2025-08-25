@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { getSigner } from '../web3/provider.js';
 
 const Sidebar = ({ activeComponent, setActiveComponent, notificationCount, onLogout, user }) => {
+  const [account, setAccount] = useState('');
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'profile', label: 'My Profile', icon: '👤' },
@@ -12,11 +15,37 @@ const Sidebar = ({ activeComponent, setActiveComponent, notificationCount, onLog
     { id: 'transactions', label: 'Transactions', icon: '📋' }
   ];
 
+  async function connectWallet() {
+    try {
+      const signer = await getSigner();
+      const addr = await signer.getAddress();
+      setAccount(addr);
+    } catch (e) {
+      // ignore; user may have rejected
+    }
+  }
+
+  useEffect(() => {
+    // No auto-connect; user clicks the button to connect
+  }, []);
+
+  const shortAddr = account ? `${account.slice(0, 6)}…${account.slice(-4)}` : '';
+
   return (
     <div className="sidebar">
       <div className="sidebar-header">
         <h2>SHM Chit Fund</h2>
         <p>Decentralized Platform</p>
+        <div style={{ marginTop: '10px' }}>
+          {account ? (
+            <div style={{ fontSize: '12px', color: '#718096' }}>Connected: {shortAddr}</div>
+          ) : (
+            <button className="logout-button" onClick={connectWallet}>
+              <span>🔗</span>
+              Connect Wallet
+            </button>
+          )}
+        </div>
       </div>
       
       {user && (

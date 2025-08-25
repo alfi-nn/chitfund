@@ -2,6 +2,7 @@
   "name": "shmapp",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.8.0",
@@ -36,5 +37,14 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
+    "@nomicfoundation/hardhat-ethers": "^3.0.5",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "chai": "^4.5.0",
+    "dotenv": "^17.2.1",
+    "ethers": "^6.15.0",
+    "hardhat": "^2.22.13"
   }
 }

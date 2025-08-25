@@ -1,0 +1,10 @@
+[
+  {"type":"function","name":"getMembers","inputs":[],"outputs":[{"name":"","type":"address[]"}],"stateMutability":"view"},
+  {"type":"function","name":"currentPhase","inputs":[],"outputs":[{"name":"","type":"uint8"}],"stateMutability":"view"},
+  {"type":"function","name":"joinGroup","inputs":[],"outputs":[],"stateMutability":"payable"},
+  {"type":"function","name":"openCycle","inputs":[{"name":"cycle","type":"uint256"}],"outputs":[],"stateMutability":"nonpayable"},
+  {"type":"function","name":"commitBid","inputs":[{"name":"commitHash","type":"bytes32"}],"outputs":[],"stateMutability":"nonpayable"},
+  {"type":"function","name":"revealBid","inputs":[{"name":"amount","type":"uint256"},{"name":"salt","type":"bytes32"}],"outputs":[],"stateMutability":"nonpayable"},
+  {"type":"function","name":"finalizeBidding","inputs":[],"outputs":[],"stateMutability":"nonpayable"},
+  {"type":"function","name":"makeContribution","inputs":[{"name":"amount","type":"uint256"}],"outputs":[],"stateMutability":"payable"}
+] 

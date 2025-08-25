@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
-import Login from './components/Login';
-import Register from './components/Register';
-import UserDashboard from './components/UserDashboard';
-import UserProfile from './components/UserProfile';
-import Balance from './components/Balance';
-import ChitGroupManagement from './components/ChitGroupManagement';
-import GroupDiscovery from './components/GroupDiscovery';
-import BiddingInterface from './components/BiddingInterface';
-import PaymentGateway from './components/PaymentGateway';
-import TransactionHistory from './components/TransactionHistory';
-import NotificationSystem from './components/NotificationSystem';
-import Sidebar from './components/Sidebar';
+import Login from './components/Login.js';
+import Register from './components/Register.js';
+import UserDashboard from './components/UserDashboard.js';
+import UserProfile from './components/UserProfile.js';
+import Balance from './components/Balance.js';
+import ChitGroupManagement from './components/ChitGroupManagement.js';
+import GroupDiscovery from './components/GroupDiscovery.js';
+import BiddingInterface from './components/BiddingInterface.js';
+import PaymentGateway from './components/PaymentGateway.js';
+import TransactionHistory from './components/TransactionHistory.js';
+import NotificationSystem from './components/NotificationSystem.js';
+import Sidebar from './components/Sidebar.js';
 
 function App() {
   const [user, setUser] = useState(() => {

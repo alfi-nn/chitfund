@@ -1,335 +1,192 @@
 import React, { useState, useEffect } from 'react';
+import { listGroups, getGroup, readGroupBasics, commitBid, revealBid, computeCommitHash } from '../web3/contracts.js';
+import { ethers } from 'ethers';
 
 const BiddingInterface = () => {
-  const [activeBidding, setActiveBidding] = useState(null);
-  const [myBid, setMyBid] = useState('');
-  const [biddingHistory, setBiddingHistory] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(0);
-
-  // Updated with current/future dates
-  const availableBiddings = [
-    {
-      id: 'BID001',
-      groupId: 'SHM001',
-      groupName: 'SHM Group 001',
-      chitAmount: 50000,
-      currentBid: 45000,
-      minBid: 40000,
-      maxBid: 48000,
-      startTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 minutes from now
-      endTime: new Date(Date.now() + 90 * 60 * 1000).toISOString(), // 90 minutes from now
-      participants: 15,
-      status: 'active'
-    },
-    {
-      id: 'BID002',
-      groupId: 'SHM002',
-      groupName: 'SHM Group 002',
-      chitAmount: 100000,
-      currentBid: 95000,
-      minBid: 90000,
-      maxBid: 98000,
-      startTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
-      endTime: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), // 3 hours from now
-      participants: 25,
-      status: 'upcoming'
-    },
-    {
-      id: 'BID003',
-      groupId: 'SHM003',
-      groupName: 'Tech Professionals Group',
-      chitAmount: 75000,
-      currentBid: 70000,
-      minBid: 65000,
-      maxBid: 72000,
-      startTime: new Date(Date.now() - 10 * 60 * 1000).toISOString(), // Started 10 minutes ago
-      endTime: new Date(Date.now() + 50 * 60 * 1000).toISOString(), // Ends in 50 minutes
-      participants: 20,
-      status: 'active'
-    }
-  ];
-
-  // Function to determine if bidding is currently active
-  const isBiddingActive = (bidding) => {
-    const now = new Date().getTime();
-    const startTime = new Date(bidding.startTime).getTime();
-    const endTime = new Date(bidding.endTime).getTime();
-    return now >= startTime && now <= endTime;
-  };
-
-  // Function to get bidding status
-  const getBiddingStatus = (bidding) => {
-    const now = new Date().getTime();
-    const startTime = new Date(bidding.startTime).getTime();
-    const endTime = new Date(bidding.endTime).getTime();
-    
-    if (now < startTime) return 'upcoming';
-    if (now >= startTime && now <= endTime) return 'active';
-    return 'ended';
-  };
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [basics, setBasics] = useState(null); // { cfg, currentCycle, phase }
+  const [commitAmount, setCommitAmount] = useState('');
+  const [saltHex, setSaltHex] = useState('');
+  const [commitHash, setCommitHash] = useState('');
+  const [revealAmount, setRevealAmount] = useState('');
+  const [revealSalt, setRevealSalt] = useState('');
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const [nowSec, setNowSec] = useState(Math.floor(Date.now() / 1000));
 
   useEffect(() => {
-    if (activeBidding) {
-      const timer = setInterval(() => {
-        const now = new Date().getTime();
-        const endTime = new Date(activeBidding.endTime).getTime();
-        const timeRemaining = Math.max(0, endTime - now);
-        setTimeLeft(timeRemaining);
-
-        if (timeRemaining === 0) {
-          // Bidding ended
-          setActiveBidding(null);
-        }
-      }, 1000);
-
-      return () => clearInterval(timer);
+    let mounted = true;
+    async function load() {
+      try {
+        const addrs = await listGroups();
+        if (mounted) setGroups(addrs);
+      } catch (e) {
+        setError(e?.message || 'Failed to load groups');
+      }
     }
-  }, [activeBidding]);
+    load();
+    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
+    return () => { mounted = false; clearInterval(t); };
+  }, []);
 
-  const formatTime = (milliseconds) => {
-    const hours = Math.floor(milliseconds / (1000 * 60 * 60));
-    const minutes = Math.floor((milliseconds % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((milliseconds % (1000 * 60)) / 1000);
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const handleJoinBidding = (bidding) => {
-    setActiveBidding(bidding);
-    setBiddingHistory([
-      { id: 1, bidder: 'User001', amount: 45000, time: '15:05:30' },
-      { id: 2, bidder: 'User002', amount: 46000, time: '15:07:15' },
-      { id: 3, bidder: 'User003', amount: 47000, time: '15:09:45' }
-    ]);
-  };
-
-  const handlePlaceBid = () => {
-    if (!myBid || myBid < activeBidding.minBid || myBid > activeBidding.maxBid) {
-      alert('Please enter a valid bid amount!');
-      return;
+  useEffect(() => {
+    let mounted = true;
+    async function fetchBasics() {
+      if (!selectedGroup) { setBasics(null); return; }
+      try {
+        const b = await readGroupBasics(selectedGroup);
+        if (mounted) setBasics(b);
+      } catch (e) {
+        setError(e?.message || 'Failed to read group basics');
+        setBasics(null);
+      }
     }
+    fetchBasics();
+    const t = setInterval(fetchBasics, 10_000);
+    return () => { mounted = false; clearInterval(t); };
+  }, [selectedGroup]);
 
-    const newBid = {
-      id: biddingHistory.length + 1,
-      bidder: 'You',
-      amount: parseInt(myBid),
-      time: new Date().toLocaleTimeString()
-    };
+  useEffect(() => {
+    if (!commitAmount || !saltHex) { setCommitHash(''); return; }
+    try {
+      const hash = computeCommitHash(commitAmount, saltHex);
+      setCommitHash(hash);
+    } catch { setCommitHash(''); }
+  }, [commitAmount, saltHex]);
 
-    setBiddingHistory([...biddingHistory, newBid]);
-    setMyBid('');
-    
-    // Update current bid
-    setActiveBidding({
-      ...activeBidding,
-      currentBid: parseInt(myBid)
-    });
+  const generateSalt = () => {
+    const bytes = ethers.randomBytes(32);
+    const hex = ethers.hexlify(bytes);
+    setSaltHex(hex);
+    setRevealSalt(hex);
   };
+
+  const phaseLabel = (p) => p === 0 ? 'Commit' : p === 1 ? 'Reveal' : p === 2 ? 'Finalized' : 'Unknown';
+
+  const computeWindows = () => {
+    if (!basics) return null;
+    const cfg = basics.cfg;
+    const cycleStart = Number(cfg.startTime) + basics.currentCycle * Number(cfg.periodDuration);
+    const commitEnd = cycleStart + Number(cfg.biddingCommitDuration);
+    const revealEnd = commitEnd + Number(cfg.biddingRevealDuration);
+    return { cycleStart, commitEnd, revealEnd };
+  };
+
+  const handleCommit = async () => {
+    if (!selectedGroup) return;
+    try {
+      setStatus('Submitting commit...'); setError('');
+      await commitBid(selectedGroup, commitAmount, saltHex);
+      setStatus('Commit submitted');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Commit failed'); setStatus('');
+    }
+  };
+
+  const handleReveal = async () => {
+    if (!selectedGroup) return;
+    try {
+      setStatus('Submitting reveal...'); setError('');
+      await revealBid(selectedGroup, revealAmount, revealSalt);
+      setStatus('Reveal submitted');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Reveal failed'); setStatus('');
+    }
+  };
+
+  const windows = computeWindows();
+  const now = nowSec;
 
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <h1>Bidding Interface</h1>
-        <p>Participate in chit fund auctions and place your bids</p>
+        <p>Commit and reveal your bids for the current cycle</p>
       </div>
 
-      {/* Active Bidding Session */}
-      {activeBidding && (
-        <div className="component-card">
-          <div className="component-header">
-            <h2>Active Bidding: {activeBidding.groupName}</h2>
-            {timeLeft > 0 && (
-              <div style={{ color: '#fff', fontSize: '18px', fontWeight: 'bold' }}>
-                Time Remaining: {formatTime(timeLeft)}
+      <div className="component-card">
+        <div className="component-header">
+          <h2>Select Group</h2>
+        </div>
+        <div className="component-body">
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <select className="form-input" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} style={{ minWidth: '360px' }}>
+              <option value="">-- Select a group address --</option>
+              {groups.map(addr => (
+                <option key={addr} value={addr}>{addr}</option>
+              ))}
+            </select>
+            {basics && (
+              <div style={{ display: 'flex', gap: '15px', color: '#718096' }}>
+                <span>Cycle: <strong>{basics.currentCycle}</strong></span>
+                <span>Phase: <strong>{phaseLabel(basics.phase)}</strong></span>
+                {windows && (
+                  <>
+                    <span>Commit ends: <strong>{new Date(windows.commitEnd * 1000).toLocaleString()}</strong></span>
+                    <span>Reveal ends: <strong>{new Date(windows.revealEnd * 1000).toLocaleString()}</strong></span>
+                    <span>Now: <strong>{new Date(now * 1000).toLocaleTimeString()}</strong></span>
+                  </>
+                )}
               </div>
             )}
           </div>
-          <div className="component-body">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
-              {/* Bidding Details */}
-              <div>
-                <h3 style={{ marginBottom: '20px', color: '#2d3748' }}>Bidding Details</h3>
-                <div style={{ display: 'grid', gap: '15px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Chit Amount:</span>
-                    <strong>₹{activeBidding.chitAmount.toLocaleString()}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Current Bid:</span>
-                    <strong style={{ color: '#e53e3e', fontSize: '18px' }}>
-                      ₹{activeBidding.currentBid.toLocaleString()}
-                    </strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Minimum Bid:</span>
-                    <strong>₹{activeBidding.minBid.toLocaleString()}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Maximum Bid:</span>
-                    <strong>₹{activeBidding.maxBid.toLocaleString()}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Participants:</span>
-                    <strong>{activeBidding.participants}</strong>
-                  </div>
-                </div>
-
-                {/* Place Bid Form */}
-                <div style={{ marginTop: '30px' }}>
-                  <h4 style={{ marginBottom: '15px' }}>Place Your Bid</h4>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <input
-                      type="number"
-                      className="form-input"
-                      placeholder="Enter bid amount"
-                      value={myBid}
-                      onChange={(e) => setMyBid(e.target.value)}
-                      min={activeBidding.minBid}
-                      max={activeBidding.maxBid}
-                      style={{ flex: 1 }}
-                    />
-                    <button 
-                      className="btn btn-primary"
-                      onClick={handlePlaceBid}
-                      disabled={timeLeft === 0}
-                    >
-                      Place Bid
-                    </button>
-                  </div>
-                  <small style={{ color: '#718096', marginTop: '5px', display: 'block' }}>
-                    Bid range: ₹{activeBidding.minBid.toLocaleString()} - ₹{activeBidding.maxBid.toLocaleString()}
-                  </small>
-                </div>
-              </div>
-
-              {/* Bidding History */}
-              <div>
-                <h3 style={{ marginBottom: '20px', color: '#2d3748' }}>Bidding History</h3>
-                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                  {biddingHistory.map((bid) => (
-                    <div 
-                      key={bid.id}
-                      style={{
-                        padding: '12px',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        marginBottom: '10px',
-                        backgroundColor: bid.bidder === 'You' ? '#ebf8ff' : '#fff'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <strong>{bid.bidder}</strong>
-                          <div style={{ fontSize: '14px', color: '#718096' }}>{bid.time}</div>
-                        </div>
-                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#e53e3e' }}>
-                          ₹{bid.amount.toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Available Biddings */}
-      <div className="component-card">
-        <div className="component-header">
-          <h2>Available Bidding Sessions</h2>
-        </div>
-        <div className="component-body">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Group</th>
-                <th>Chit Amount</th>
-                <th>Current Bid</th>
-                <th>Bid Range</th>
-                <th>Participants</th>
-                <th>Start Time</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {availableBiddings.map((bidding) => {
-                const currentStatus = getBiddingStatus(bidding);
-                const isActive = isBiddingActive(bidding);
-                
-                return (
-                  <tr key={bidding.id}>
-                    <td>
-                      <div>
-                        <strong>{bidding.groupName}</strong>
-                        <div style={{ fontSize: '12px', color: '#718096' }}>ID: {bidding.groupId}</div>
-                      </div>
-                    </td>
-                    <td>₹{bidding.chitAmount.toLocaleString()}</td>
-                    <td>₹{bidding.currentBid.toLocaleString()}</td>
-                    <td>₹{bidding.minBid.toLocaleString()} - ₹{bidding.maxBid.toLocaleString()}</td>
-                    <td>{bidding.participants}</td>
-                    <td>{new Date(bidding.startTime).toLocaleString()}</td>
-                    <td>
-                      <span className={`status-badge status-${currentStatus}`}>
-                        {currentStatus}
-                      </span>
-                    </td>
-                    <td>
-                      {isActive && (
-                        <button 
-                          className="btn btn-primary"
-                          onClick={() => handleJoinBidding(bidding)}
-                          style={{ padding: '6px 12px', fontSize: '12px' }}
-                        >
-                          Join Bidding
-                        </button>
-                      )}
-                      {currentStatus === 'upcoming' && (
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '6px 12px', fontSize: '12px' }}
-                          disabled
-                        >
-                          Coming Soon
-                        </button>
-                      )}
-                      {currentStatus === 'ended' && (
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '6px 12px', fontSize: '12px' }}
-                          disabled
-                        >
-                          Ended
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         </div>
       </div>
 
-      {/* Bidding Statistics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginTop: '20px' }}>
-        <div className="stat-card">
-          <h3>Active Biddings</h3>
-          <div className="value">{availableBiddings.filter(b => isBiddingActive(b)).length}</div>
-          <div className="change">Currently running</div>
+      {/* Commit */}
+      <div className="component-card">
+        <div className="component-header">
+          <h2>Commit Bid</h2>
         </div>
-        <div className="stat-card">
-          <h3>Total Bids Placed</h3>
-          <div className="value">15</div>
-          <div className="change">This month</div>
+        <div className="component-body">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Amount (uint256)</label>
+              <input className="form-input" type="number" value={commitAmount} onChange={(e) => setCommitAmount(e.target.value)} placeholder="e.g. 100" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Salt (bytes32 hex)</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input className="form-input" type="text" value={saltHex} onChange={(e) => setSaltHex(e.target.value)} placeholder="0x...32 bytes" />
+                <button className="btn btn-secondary" onClick={generateSalt}>Random</button>
+              </div>
+            </div>
+          </div>
+          {commitHash && (
+            <div style={{ marginTop: '10px', color: '#718096' }}>Commit hash: <code>{commitHash}</code></div>
+          )}
+          <div style={{ marginTop: '12px' }}>
+            <button className="btn btn-primary" onClick={handleCommit} disabled={!selectedGroup || !commitAmount || !saltHex}>Submit Commit</button>
+          </div>
         </div>
-        <div className="stat-card">
-          <h3>Success Rate</h3>
-          <div className="value">67%</div>
-          <div className="change">Winning bids</div>
+      </div>
+
+      {/* Reveal */}
+      <div className="component-card">
+        <div className="component-header">
+          <h2>Reveal Bid</h2>
         </div>
+        <div className="component-body">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Amount (uint256)</label>
+              <input className="form-input" type="number" value={revealAmount} onChange={(e) => setRevealAmount(e.target.value)} placeholder="Must match commit" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Salt (bytes32 hex)</label>
+              <input className="form-input" type="text" value={revealSalt} onChange={(e) => setRevealSalt(e.target.value)} placeholder="Must match commit" />
+            </div>
+          </div>
+          <div style={{ marginTop: '12px' }}>
+            <button className="btn btn-primary" onClick={handleReveal} disabled={!selectedGroup || !revealAmount || !revealSalt}>Submit Reveal</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '10px' }}>
+        {status && <div style={{ color: '#2f855a' }}>{status}</div>}
+        {error && <div style={{ color: '#c53030' }}>{error}</div>}
       </div>
     </div>
   );

@@ -1,57 +1,86 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createGroup, listGroups, getGroup, openCycle, finalizeBidding, distributeFunds } from '../web3/contracts.js';
 
 const ChitGroupManagement = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newGroup, setNewGroup] = useState({
-    name: '',
-    amount: '',
-    members: '',
-    duration: '',
-    startDate: ''
+    contributionAmount: '',
+    membersMax: '',
+    durationPeriods: '',
+    startTime: '',
+    organizerFeeBps: '500',
+    securityDeposit: '0',
+    biddingCommitDuration: '600',
+    biddingRevealDuration: '600',
+    periodDuration: '2592000',
   });
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [txStatus, setTxStatus] = useState('');
+  const [error, setError] = useState('');
+  const [cycleIndex, setCycleIndex] = useState(0);
 
-  const chitGroups = [
-    {
-      id: 'SHM001',
-      name: 'SHM Group 001',
-      amount: '₹50,000',
-      members: 20,
-      currentMembers: 15,
-      duration: '20 months',
-      startDate: '2024-01-15',
-      status: 'active',
-      nextBidding: '2024-12-15 3:00 PM'
-    },
-    {
-      id: 'SHM002',
-      name: 'SHM Group 002',
-      amount: '₹1,00,000',
-      members: 25,
-      currentMembers: 25,
-      duration: '25 months',
-      startDate: '2024-02-01',
-      status: 'active',
-      nextBidding: '2024-12-20 2:00 PM'
-    },
-    {
-      id: 'SHM003',
-      name: 'SHM Group 003',
-      amount: '₹25,000',
-      members: 15,
-      currentMembers: 10,
-      duration: '15 months',
-      startDate: '2024-03-01',
-      status: 'forming',
-      nextBidding: 'TBD'
+  async function refreshGroups() {
+    const addresses = await listGroups();
+    setGroups((await Promise.all(addresses.map(async (addr) => {
+      try {
+        const group = getGroup(addr, true);
+        const [members, cfg, currentCycle] = await Promise.all([group.getMembers(), group.cfg(), group.currentCycle?.() ?? Promise.resolve(0)]);
+        const contributionAmount = cfg.contributionAmount?.toString?.() ?? cfg[2]?.toString?.() ?? '0';
+        const membersMax = Number(cfg.membersMax ?? cfg[3] ?? 0);
+        const durationPeriods = Number(cfg.durationPeriods ?? cfg[4] ?? 0);
+        const startTime = Number(cfg.startTime ?? cfg[5] ?? 0);
+        return { address: addr, contributionAmount, membersMax, currentMembers: members.length, durationPeriods, startDate: startTime ? new Date(startTime * 1000).toISOString().slice(0, 10) : '-', status: members.length >= membersMax ? 'full' : (startTime && Date.now() / 1000 >= startTime ? 'active' : 'forming'), currentCycle: Number(currentCycle || 0) };
+      } catch {
+        return { address: addr, contributionAmount: '0', membersMax: 0, currentMembers: 0, durationPeriods: 0, startDate: '-', status: 'forming', currentCycle: 0 };
+      }
+    }))))
+  }
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      setLoading(true);
+      setError('');
+      try {
+        await refreshGroups();
+      } catch (e) {
+        if (mounted) setError(e?.message || 'Failed to load groups');
+      } finally {
+        if (mounted) setLoading(false);
+      }
     }
-  ];
+    load();
+    return () => { mounted = false; };
+  }, []);
 
-  const handleCreateGroup = (e) => {
+  const handleCreateGroup = async (e) => {
     e.preventDefault();
-    // Here you would typically make an API call to create the group
-    console.log('Creating new group:', newGroup);
-    setShowCreateForm(false);
-    setNewGroup({ name: '', amount: '', members: '', duration: '', startDate: '' });
+    try {
+      setTxStatus('Submitting transaction...');
+      setError('');
+      const nowSec = Math.floor(Date.now() / 1000);
+      const cfg = {
+        organizer: undefined, // validated by factory equals msg.sender
+        currency: '0x0000000000000000000000000000000000000000',
+        contributionAmount: newGroup.contributionAmount,
+        membersMax: Number(newGroup.membersMax),
+        durationPeriods: Number(newGroup.durationPeriods),
+        startTime: newGroup.startTime ? Math.floor(new Date(newGroup.startTime).getTime() / 1000) : nowSec + 60,
+        organizerFeeBps: Number(newGroup.organizerFeeBps),
+        securityDeposit: newGroup.securityDeposit,
+        biddingCommitDuration: Number(newGroup.biddingCommitDuration),
+        biddingRevealDuration: Number(newGroup.biddingRevealDuration),
+        periodDuration: Number(newGroup.periodDuration),
+      };
+      const groupAddr = await createGroup(cfg);
+      setTxStatus(groupAddr ? `Created group at ${groupAddr}` : 'Transaction confirmed (no event parsed)');
+      setShowCreateForm(false);
+      await refreshGroups();
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Failed to create group');
+      setTxStatus('');
+    }
   };
 
   const handleInputChange = (e) => {
@@ -61,14 +90,49 @@ const ChitGroupManagement = () => {
     });
   };
 
+  const handleOpenCycle = async (address, cycle) => {
+    try {
+      setTxStatus(`Opening cycle ${cycle}...`);
+      await openCycle(address, cycle);
+      await refreshGroups();
+      setTxStatus('Cycle opened');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Failed to open cycle');
+      setTxStatus('');
+    }
+  };
+
+  const handleFinalize = async (address) => {
+    try {
+      setTxStatus('Finalizing bidding...');
+      await finalizeBidding(address);
+      await refreshGroups();
+      setTxStatus('Bidding finalized');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Failed to finalize bidding');
+      setTxStatus('');
+    }
+  };
+
+  const handleDistribute = async (address) => {
+    try {
+      setTxStatus('Distributing funds...');
+      await distributeFunds(address);
+      await refreshGroups();
+      setTxStatus('Funds distributed');
+    } catch (e) {
+      setError(e?.shortMessage || e?.message || 'Failed to distribute funds');
+      setTxStatus('');
+    }
+  };
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <h1>Chit Group Management</h1>
-        <p>Create and manage your chit fund groups</p>
+        <p>Create and manage your on-chain chit fund groups</p>
       </div>
 
-      {/* Create New Group Button */}
       <div style={{ marginBottom: '20px' }}>
         <button 
           className="btn btn-primary"
@@ -78,7 +142,6 @@ const ChitGroupManagement = () => {
         </button>
       </div>
 
-      {/* Create Group Form */}
       {showCreateForm && (
         <div className="component-card">
           <div className="component-header">
@@ -88,50 +151,36 @@ const ChitGroupManagement = () => {
             <form onSubmit={handleCreateGroup}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div className="form-group">
-                  <label className="form-label">Group Name</label>
+                  <label className="form-label">Contribution Amount (wei)</label>
                   <input
-                    type="text"
-                    name="name"
+                    type="number"
+                    name="contributionAmount"
                     className="form-input"
-                    value={newGroup.name}
+                    value={newGroup.contributionAmount}
                     onChange={handleInputChange}
-                    placeholder="Enter group name"
+                    placeholder="e.g. 10000000000000000 for 0.01 ETH"
                     required
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Chit Amount</label>
+                  <label className="form-label">Members Max</label>
                   <input
                     type="number"
-                    name="amount"
+                    name="membersMax"
                     className="form-input"
-                    value={newGroup.amount}
+                    value={newGroup.membersMax}
                     onChange={handleInputChange}
-                    placeholder="Enter amount"
                     required
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Number of Members</label>
+                  <label className="form-label">Duration Periods</label>
                   <input
                     type="number"
-                    name="members"
+                    name="durationPeriods"
                     className="form-input"
-                    value={newGroup.members}
+                    value={newGroup.durationPeriods}
                     onChange={handleInputChange}
-                    placeholder="Enter number of members"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Duration (months)</label>
-                  <input
-                    type="number"
-                    name="duration"
-                    className="form-input"
-                    value={newGroup.duration}
-                    onChange={handleInputChange}
-                    placeholder="Enter duration in months"
                     required
                   />
                 </div>
@@ -139,15 +188,69 @@ const ChitGroupManagement = () => {
                   <label className="form-label">Start Date</label>
                   <input
                     type="date"
-                    name="startDate"
+                    name="startTime"
                     className="form-input"
-                    value={newGroup.startDate}
+                    value={newGroup.startTime}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Organizer Fee (bps)</label>
+                  <input
+                    type="number"
+                    name="organizerFeeBps"
+                    className="form-input"
+                    value={newGroup.organizerFeeBps}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Security Deposit (wei)</label>
+                  <input
+                    type="number"
+                    name="securityDeposit"
+                    className="form-input"
+                    value={newGroup.securityDeposit}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Commit Duration (sec)</label>
+                  <input
+                    type="number"
+                    name="biddingCommitDuration"
+                    className="form-input"
+                    value={newGroup.biddingCommitDuration}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Reveal Duration (sec)</label>
+                  <input
+                    type="number"
+                    name="biddingRevealDuration"
+                    className="form-input"
+                    value={newGroup.biddingRevealDuration}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Period Duration (sec)</label>
+                  <input
+                    type="number"
+                    name="periodDuration"
+                    className="form-input"
+                    value={newGroup.periodDuration}
                     onChange={handleInputChange}
                     required
                   />
                 </div>
               </div>
-              <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button type="submit" className="btn btn-primary">
                   Create Group
                 </button>
@@ -158,53 +261,47 @@ const ChitGroupManagement = () => {
                 >
                   Cancel
                 </button>
+                {txStatus && <span style={{ color: '#2f855a' }}>{txStatus}</span>}
+                {error && <span style={{ color: '#c53030' }}>{error}</span>}
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Chit Groups List */}
       <div className="component-card">
         <div className="component-header">
-          <h2>Your Chit Groups</h2>
+          <h2>Your Chit Groups {loading ? '(loading...)' : `(${groups.length})`}</h2>
         </div>
         <div className="component-body">
+          {error && <div style={{ color: '#c53030', marginBottom: '10px' }}>{error}</div>}
           <table className="table">
             <thead>
               <tr>
-                <th>Group ID</th>
-                <th>Name</th>
-                <th>Amount</th>
+                <th>Address</th>
+                <th>Contribution/Period (wei)</th>
                 <th>Members</th>
                 <th>Duration</th>
                 <th>Status</th>
-                <th>Next Bidding</th>
+                <th>Start</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {chitGroups.map((group) => (
-                <tr key={group.id}>
-                  <td>{group.id}</td>
-                  <td>{group.name}</td>
-                  <td>{group.amount}</td>
-                  <td>{group.currentMembers}/{group.members}</td>
-                  <td>{group.duration}</td>
+              {groups.map((g) => (
+                <tr key={g.address}>
+                  <td>{g.address}</td>
+                  <td>{g.contributionAmount}</td>
+                  <td>{g.currentMembers}/{g.membersMax}</td>
+                  <td>{g.durationPeriods}</td>
+                  <td><span className={`status-badge status-${g.status}`}>{g.status}</span></td>
+                  <td>{g.startDate}</td>
                   <td>
-                    <span className={`status-badge status-${group.status}`}>
-                      {group.status}
-                    </span>
-                  </td>
-                  <td>{group.nextBidding}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
-                        View
-                      </button>
-                      <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
-                        Edit
-                      </button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <input type="number" value={cycleIndex} onChange={(e) => setCycleIndex(Number(e.target.value || 0))} style={{ width: '80px' }} />
+                      <button className="btn btn-secondary" onClick={() => handleOpenCycle(g.address, cycleIndex)}>Open Cycle</button>
+                      <button className="btn btn-secondary" onClick={() => handleFinalize(g.address)}>Finalize</button>
+                      <button className="btn btn-secondary" onClick={() => handleDistribute(g.address)}>Distribute</button>
                     </div>
                   </td>
                 </tr>
@@ -214,22 +311,21 @@ const ChitGroupManagement = () => {
         </div>
       </div>
 
-      {/* Group Statistics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginTop: '20px' }}>
         <div className="stat-card">
           <h3>Total Groups</h3>
-          <div className="value">{chitGroups.length}</div>
-          <div className="change">Active: {chitGroups.filter(g => g.status === 'active').length}</div>
+          <div className="value">{groups.length}</div>
+          <div className="change">On-chain</div>
+        </div>
+        <div className="stat-card">
+          <h3>Active Groups</h3>
+          <div className="value">{groups.filter(g => g.status === 'active').length}</div>
+          <div className="change">In progress</div>
         </div>
         <div className="stat-card">
           <h3>Total Members</h3>
-          <div className="value">{chitGroups.reduce((sum, group) => sum + group.currentMembers, 0)}</div>
+          <div className="value">{groups.reduce((sum, g) => sum + (g.currentMembers || 0), 0)}</div>
           <div className="change">Across all groups</div>
-        </div>
-        <div className="stat-card">
-          <h3>Total Value</h3>
-          <div className="value">₹1,75,000</div>
-          <div className="change">Combined chit amount</div>
         </div>
       </div>
     </div>

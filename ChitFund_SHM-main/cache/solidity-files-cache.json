@@ -1,0 +1,247 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "C:\\Users\\kjalf\\Downloads\\ChitFund_SHM-main\\ChitFund_SHM-main\\contracts\\BiddingSystem.sol": {
+      "lastModificationDate": 1756108979063,
+      "contentHash": "b16c602c072dcaba4bcc9e2ca7850e95",
+      "sourceName": "contracts/BiddingSystem.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": false,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./Common.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "BiddingSystem"
+      ]
+    },
+    "C:\\Users\\kjalf\\Downloads\\ChitFund_SHM-main\\ChitFund_SHM-main\\contracts\\Common.sol": {
+      "lastModificationDate": 1756108903496,
+      "contentHash": "277cafdbd7a2abd5575b8fc2c760020d",
+      "sourceName": "contracts/Common.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": false,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "IChitGroupLike",
+        "IERC20",
+        "IReputationSystem",
+        "Ownable",
+        "Pausable",
+        "ReentrancyGuard",
+        "Roles"
+      ]
+    },
+    "C:\\Users\\kjalf\\Downloads\\ChitFund_SHM-main\\ChitFund_SHM-main\\contracts\\ChitGroup.sol": {
+      "lastModificationDate": 1756109041416,
+      "contentHash": "1220215eb6b6d4cf2f4e318c1744ebb5",
+      "sourceName": "contracts/ChitGroup.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": false,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./Common.sol",
+        "./Common.sol",
+        "./BiddingSystem.sol",
+        "./PaymentManager.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ChitGroup"
+      ]
+    },
+    "C:\\Users\\kjalf\\Downloads\\ChitFund_SHM-main\\ChitFund_SHM-main\\contracts\\PaymentManager.sol": {
+      "lastModificationDate": 1756108997334,
+      "contentHash": "86dc5aa4245d5efe0e7929e8d2ee9368",
+      "sourceName": "contracts/PaymentManager.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": false,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./Common.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "PaymentManager"
+      ]
+    },
+    "C:\\Users\\kjalf\\Downloads\\ChitFund_SHM-main\\ChitFund_SHM-main\\contracts\\ReputationSystem.sol": {
+      "lastModificationDate": 1756108964582,
+      "contentHash": "157028caac3770c868c235f71f144170",
+      "sourceName": "contracts/ReputationSystem.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": false,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./Common.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ReputationSystem"
+      ]
+    },
+    "C:\\Users\\kjalf\\Downloads\\ChitFund_SHM-main\\ChitFund_SHM-main\\contracts\\ChitFundFactory.sol": {
+      "lastModificationDate": 1756109258451,
+      "contentHash": "821fd857a6639f5551fcf16cb88b9007",
+      "sourceName": "contracts/ChitFundFactory.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "viaIR": false,
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./Common.sol",
+        "./ChitGroup.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ChitFundFactory"
+      ]
+    }
+  }
+}
