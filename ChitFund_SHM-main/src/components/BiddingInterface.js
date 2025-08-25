@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { listGroups, getGroup, readGroupBasics, commitBid, revealBid, computeCommitHash } from '../web3/contracts.js';
+import { getProvider } from '../web3/provider.js';
 import { ethers } from 'ethers';
 
 const BiddingInterface = () => {
@@ -14,6 +15,12 @@ const BiddingInterface = () => {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [nowSec, setNowSec] = useState(Math.floor(Date.now() / 1000));
+
+  // Live bidding state
+  const [biddingAddress, setBiddingAddress] = useState('');
+  const [winner, setWinner] = useState('');
+  const [winningAmount, setWinningAmount] = useState('');
+  const [reveals, setReveals] = useState([]); // { bidder, amount }
 
   useEffect(() => {
     let mounted = true;
@@ -95,6 +102,66 @@ const BiddingInterface = () => {
     }
   };
 
+  // Discover and subscribe to the cycle's bidding contract
+  useEffect(() => {
+    let unsub = () => {};
+    async function wire() {
+      try {
+        setBiddingAddress(''); setWinner(''); setWinningAmount(''); setReveals([]);
+        if (!selectedGroup || !basics) return;
+        const group = getGroup(selectedGroup, true);
+        const addr = await group.cycleBidding(basics.currentCycle);
+        if (addr && ethers.isAddress(addr) && addr !== ethers.ZeroAddress) {
+          setBiddingAddress(addr);
+          const provider = getProvider();
+          const bsAbi = [
+            'event BidCommitted(address indexed bidder)',
+            'event BidRevealed(address indexed bidder, uint256 amount)',
+            'event WinnerSelected(address indexed winner, uint256 amount)',
+            'function winner() view returns (address)',
+            'function winningAmount() view returns (uint256)'
+          ];
+          const bs = new ethers.Contract(addr, bsAbi, provider);
+          // Load current state
+          try {
+            const w = await bs.winner();
+            const wa = await bs.winningAmount();
+            setWinner(w);
+            setWinningAmount(wa.toString());
+          } catch {}
+          // Subscribe to events
+          const onReveal = (bidder, amount) => {
+            setReveals(prev => [{ bidder, amount: amount.toString() }, ...prev].slice(0, 50));
+            // optimistic update
+            try { setWinningAmount((cur) => {
+              const curBn = cur ? ethers.toBigInt(cur) : undefined;
+              const amt = ethers.toBigInt(amount);
+              if (!winner || (curBn !== undefined && amt < curBn)) {
+                setWinner(bidder);
+                return amt.toString();
+              }
+              return cur;
+            }); } catch {}
+          };
+          const onWinner = (w, amt) => {
+            setWinner(w);
+            setWinningAmount(amt.toString());
+          };
+          bs.on('BidRevealed', onReveal);
+          bs.on('WinnerSelected', onWinner);
+          unsub = () => {
+            bs.off('BidRevealed', onReveal);
+            bs.off('WinnerSelected', onWinner);
+          };
+        }
+      } catch (e) {
+        // ignore wiring errors
+      }
+    }
+    wire();
+    return () => { try { unsub(); } catch {} };
+  }, [selectedGroup, basics]);
+
   const windows = computeWindows();
   const now = nowSec;
 
@@ -133,6 +200,44 @@ const BiddingInterface = () => {
           </div>
         </div>
       </div>
+
+      {/* Live status */}
+      {biddingAddress && (
+        <div className="component-card">
+          <div className="component-header">
+            <h2>Live Bidding Status</h2>
+          </div>
+          <div className="component-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <div style={{ fontSize: '12px', color: '#718096' }}>Bidding Contract</div>
+                <div style={{ fontWeight: '600' }}>{biddingAddress}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', color: '#718096' }}>Current Winner</div>
+                <div style={{ fontWeight: '600' }}>{winner || '-'}</div>
+                <div style={{ fontSize: '12px', color: '#718096' }}>Winning Amount</div>
+                <div style={{ fontWeight: '600' }}>{winningAmount || '-'}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: '12px' }}>
+              <h4>Recent Reveals</h4>
+              {reveals.length === 0 ? (
+                <div style={{ color: '#718096' }}>No reveals yet.</div>
+              ) : (
+                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {reveals.map((r, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>
+                      <span>{r.bidder}</span>
+                      <span>{r.amount}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Commit */}
       <div className="component-card">

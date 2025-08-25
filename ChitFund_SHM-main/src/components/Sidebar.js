@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getSigner } from '../web3/provider.js';
+import { getSigner, ensureNetwork } from '../web3/provider.js';
 
 const Sidebar = ({ activeComponent, setActiveComponent, notificationCount, onLogout, user }) => {
   const [account, setAccount] = useState('');
@@ -17,6 +17,7 @@ const Sidebar = ({ activeComponent, setActiveComponent, notificationCount, onLog
 
   async function connectWallet() {
     try {
+      await ensureNetwork();
       const signer = await getSigner();
       const addr = await signer.getAddress();
       setAccount(addr);
@@ -38,7 +39,7 @@ const Sidebar = ({ activeComponent, setActiveComponent, notificationCount, onLog
         <p>Decentralized Platform</p>
         <div style={{ marginTop: '10px' }}>
           {account ? (
-            <div style={{ fontSize: '12px', color: '#718096' }}>Connected: {shortAddr}</div>
+            <div style={{ fontSize: '12px', color: 'black' }}>Connected: {shortAddr}</div>
           ) : (
             <button className="logout-button" onClick={connectWallet}>
               <span>🔗</span>

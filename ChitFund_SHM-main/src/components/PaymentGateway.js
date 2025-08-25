@@ -89,11 +89,11 @@ const PaymentGateway = () => {
         <p>Make your contribution to the selected chit group</p>
       </div>
 
-      <div className="component-card">
-        <div className="component-header">
+        <div className="component-card">
+          <div className="component-header">
           <h2>Select Group</h2>
-        </div>
-        <div className="component-body">
+          </div>
+          <div className="component-body">
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <select className="form-input" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} style={{ minWidth: '360px' }}>
               <option value="">-- Select a group address --</option>
